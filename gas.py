@@ -39,25 +39,25 @@ def RoeSolver2(uLin: torch.Tensor, uRin: torch.Tensor, gammaIn: torch.Tensor):
     rev2 = rev0.clone()
     rev4 = rev0.clone()
 
-    #rev0[:, 0] = 1
-    rev0[:, 1] = L0Roe
-    rev0[:, 2] = UyRoe
-    rev0[:, 3] = HRoe - UxRoe * aRoe
+    #rev0[:, [0]] = 1
+    rev0[:, [1]] = L0Roe
+    rev0[:, [2]] = UyRoe
+    rev0[:, [3]] = HRoe - UxRoe * aRoe
 
-    #rev1[:, 0] = 1
-    rev1[:, 1] = UxRoe
-    rev1[:, 2] = UyRoe
-    rev1[:, 3] = 0.5 * UsqrRoe
+    #rev1[:, [0]] = 1
+    rev1[:, [1]] = UxRoe
+    rev1[:, [2]] = UyRoe
+    rev1[:, [3]] = 0.5 * UsqrRoe
 
-    rev2[:, 0] = 0
-    rev2[:, 1] = 0
-    # rev2[:, 2] = 1
-    rev2[:, 3] = UyRoe
+    rev2[:, [0]] = 0
+    rev2[:, [1]] = 0
+    # rev2[:, [2]] = 1
+    rev2[:, [3]] = UyRoe
 
-    #rev4[:, 0] = 1
-    rev4[:, 1] = L4Roe
-    rev4[:, 2] = UyRoe
-    rev4[:, 3] = HRoe + UxRoe * aRoe
+    #rev4[:, 0[]] = 1
+    rev4[:, [1]] = L4Roe
+    rev4[:, [2]] = UyRoe
+    rev4[:, [3]] = HRoe + UxRoe * aRoe
 
     rhoInc = rhoR - rhoL
     pinc = pR - pL
@@ -82,10 +82,10 @@ def RoeSolver2(uLin: torch.Tensor, uRin: torch.Tensor, gammaIn: torch.Tensor):
 
 
 def F_uExpand_V1(uIn: torch.Tensor, gammaIn: torch.Tensor):
-    rho = uIn[:, 0]  # ! rho is a reference here
-    Ux = uIn[:, 1] / rho
-    Uy = uIn[:, 2] / rho
-    E = uIn[:, 3]/rho
+    rho = uIn[:, [0]]  # ! rho is a reference here
+    Ux = uIn[:, [1]] / rho
+    Uy = uIn[:, [2]] / rho
+    E = uIn[:, [3]]/rho
     Usqr = Ux ** 2 + Uy ** 2
     p = (E - 0.5 * Usqr) * rho * (gammaIn - 1)
     a = torch.sqrt(gammaIn * p / rho)
@@ -122,35 +122,53 @@ def F_u2F2(uIn: torch.Tensor, ux: torch.Tensor,
            p: torch.Tensor, gammaIn: torch.Tensor):
     F = torch.zeros_like(uIn)
     F[:, 0] = uIn[:, 1]
-    F[:, 1] = uIn[:, 1] * ux + p
-    F[:, 2] = uIn[:, 2] * ux
-    F[:, 3] = (uIn[:, 3] + p) * ux
+    F[:, 1] = uIn[:, 1] * ux.view(-1) + p.view(-1)
+    F[:, 2] = uIn[:, 2] * ux.view(-1)
+    F[:, 3] = (uIn[:, 3] + p.view(-1)) * ux.view(-1)
     return F
 
 
 def F_u_yfce2xfce(U: torch.Tensor):
     Uc = U.view(-1, 4)
-    ut = Uc[:, 1]
+    ut = Uc[:, 1].clone()
     Uc[:, 1] = - Uc[:, 2]
     Uc[:, 2] = ut
 
 
 def F_u_xfce2yfce(U: torch.Tensor):
     Uc = U.view(-1, 4)
-    ut = Uc[:, 1]
+    ut = Uc[:, 1].clone() # ! easy to omit!!
     Uc[:, 1] = Uc[:, 2]
     Uc[:, 2] = -ut
 
 
-def EulerCartRHS(u, hLe, hRi, hLo, hUp,
+def F_u2maxLamX(uIn: torch.Tensor, gammaIn: torch.Tensor):
+    u = uIn.view(-1, 4)
+    gamma = gammaIn.view(-1, 1)
+    rho = u[:, 0]
+    Ux = u[:, 1] / rho
+    Uy = u[:, 2] / rho
+    Usqr = Ux**2 + Uy**2
+
+    p = (gamma - 1) * (u[:, 3] - 0.5 * Usqr * rho)
+
+    a = (gamma * p / rho).sqrt()
+    um = Ux - a
+    up = Ux + a
+    return um.abs().maximum(up.abs()).view_as(uIn[:, :, 0])
+
+
+def EulerCartRHS(uIn, hLe, hRi, hLo, hUp,
                  hx, hy, Vol,
                  wBLe, wBRi, wBLo, wBUp,
                  uLeB, uRiB, uLoB, uUpB,
                  gamma):
-    DLe = (u - Le(u)) / hLe
-    DRi = (u - Ri(u)) / hRi
-    DUp = (u - Up(u)) / hUp
-    DLo = (u - Lo(u)) / hLo
+    # u = uIn.clone()
+    u = uIn
+    DLe = (u - Le(u)) / hLe.unsqueeze(2)
+    DRi = (u - Ri(u)) / hRi.unsqueeze(2)
+    DUp = (u - Up(u)) / hUp.unsqueeze(2)
+    DLo = (u - Lo(u)) / hLo.unsqueeze(2)
 
     DLe.view(-1, 4)[wBLe, :] = 0
     DRi.view(-1, 4)[wBRi, :] = 0
@@ -159,11 +177,12 @@ def EulerCartRHS(u, hLe, hRi, hLo, hUp,
 
     DCx = tvd.F_TVD_Slope(DLe, DRi)
     DCy = tvd.F_TVD_Slope(DLo, DUp)
+    # print(DCx.max())
 
-    uLe = -hx * 0.5 * DCx + u
-    uRi = +hx * 0.5 * DCx + u
-    uLo = -hy * 0.5 * DCy + u
-    uUp = +hy * 0.5 * DCy + u
+    uLe = -hx.unsqueeze(2) * 0.5 * DCx + u
+    uRi = +hx.unsqueeze(2) * 0.5 * DCx + u
+    uLo = -hy.unsqueeze(2) * 0.5 * DCy + u
+    uUp = +hy.unsqueeze(2) * 0.5 * DCy + u
 
     FLe_Ri = uLe
     FLe_Le = Le(uRi)
@@ -209,6 +228,7 @@ def EulerCartRHS(u, hLe, hRi, hLo, hUp,
     F_u_yfce2xfce(fUp)
     F_u_yfce2xfce(fLo)
 
-    dUdt = ((fLe - fRi) * hy + (fLo - fUp) * hx) / Vol
+    dUdt = ((fLe - fRi) * hy.unsqueeze(2) +
+            (fLo - fUp) * hx.unsqueeze(2)) / Vol.unsqueeze(2)
 
     return dUdt

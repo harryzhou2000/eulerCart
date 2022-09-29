@@ -54,7 +54,7 @@ def RoeSolver2(uLin: torch.Tensor, uRin: torch.Tensor, gammaIn: torch.Tensor):
     # rev2[:, [2]] = 1
     rev2[:, [3]] = UyRoe
 
-    #rev4[:, 0[]] = 1
+    # rev4[:, 0[]] = 1
     rev4[:, [1]] = L4Roe
     rev4[:, [2]] = UyRoe
     rev4[:, [3]] = HRoe + UxRoe * aRoe
@@ -65,10 +65,18 @@ def RoeSolver2(uLin: torch.Tensor, uRin: torch.Tensor, gammaIn: torch.Tensor):
     incUx = UxR - UxL
     incUy = UyR - UyL
 
-    alpha0 = 0.5 * (pinc - rhoRoe * incUx * aRoe) / asqrRoe
-    alpha1 = rhoInc - pinc / asqrRoe
-    alpha2 = rhoRoe * incUy
-    alpha4 = 0.5 * (pinc + rhoRoe * incUx * aRoe) / asqrRoe
+    # alpha0 = 0.5 * (pinc - rhoRoe * incUx * aRoe) / asqrRoe
+    # alpha1 = rhoInc - pinc / asqrRoe
+    # alpha2 = rhoRoe * incUy
+    # alpha4 = 0.5 * (pinc + rhoRoe * incUx * aRoe) / asqrRoe
+
+    uinc = uR - uL
+    alpha2 = uinc[:, [2]] - UyRoe * rhoInc
+    incU4c = uinc[:, [3]] - (uinc[:, [2]] - UyRoe * rhoInc) * UyRoe
+    alpha1 = (gamma-1) / asqrRoe * (rhoInc *
+                                    (HRoe - UxRoe**2) + UxRoe * uinc[:, [1]] - incU4c)
+    alpha0 = 0.5 * (rhoInc * L4Roe - uinc[:, [1]] - aRoe * alpha1) / aRoe
+    alpha4 = rhoInc - (alpha0 + alpha1)
 
     FL = F_u2F2(uL, UxL, pL, gamma)
     FR = F_u2F2(uR, UxR, pR, gamma)
@@ -137,7 +145,7 @@ def F_u_yfce2xfce(U: torch.Tensor):
 
 def F_u_xfce2yfce(U: torch.Tensor):
     Uc = U.view(-1, 4)
-    ut = Uc[:, 1].clone() # ! easy to omit!!
+    ut = Uc[:, 1].clone()  # ! easy to omit!!
     Uc[:, 1] = Uc[:, 2]
     Uc[:, 2] = -ut
 
@@ -166,8 +174,8 @@ def EulerCartRHS(uIn, hLe, hRi, hLo, hUp,
     # u = uIn.clone()
     u = uIn
     DLe = (u - Le(u)) / hLe.unsqueeze(2)
-    DRi = (u - Ri(u)) / hRi.unsqueeze(2)
-    DUp = (u - Up(u)) / hUp.unsqueeze(2)
+    DRi = (Ri(u) - u) / hRi.unsqueeze(2)
+    DUp = (Up(u) - u) / hUp.unsqueeze(2)
     DLo = (u - Lo(u)) / hLo.unsqueeze(2)
 
     DLe.view(-1, 4)[wBLe, :] = 0
@@ -200,13 +208,13 @@ def EulerCartRHS(uIn, hLe, hRi, hLo, hUp,
     FLo_Lo = Lo(uUp)
     FLo_Lo[:, 0, :] = uLoB.view(1, 4)
     FLo_Lo.view(-1, 4)[wBLo, :] = FLo_Up.view(-1, 4)[wBLo, :]
-    FLo_Lo.view(-1, 4)[wBLo, 1] = -FLo_Up.view(-1, 4)[wBLo, 2]
+    FLo_Lo.view(-1, 4)[wBLo, 2] = -FLo_Up.view(-1, 4)[wBLo, 2]
 
     FUp_Lo = uUp
     FUp_Up = Up(uLo)
     FUp_Up[:, -1, :] = uUpB.view(1, 4)
     FUp_Up.view(-1, 4)[wBUp, :] = FUp_Lo.view(-1, 4)[wBUp, :]
-    FUp_Up.view(-1, 4)[wBUp, 1] = -FUp_Lo.view(-1, 4)[wBUp, 2]
+    FUp_Up.view(-1, 4)[wBUp, 2] = -FUp_Lo.view(-1, 4)[wBUp, 2]
 
     F_FixU(FLe_Le, gamma)
     F_FixU(FLe_Ri, gamma)

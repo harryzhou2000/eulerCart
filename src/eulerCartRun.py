@@ -5,14 +5,23 @@ import eulerCart.solver as ecsolver
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import os, sys
+import pickle, json
+
+from safetensors.torch import save_file
 
 
 def Run():
     sz = (4096, 4096)
     CFL = 0.2
-    tOuts = [0, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5]
-    see = 10
+    tOuts = [0.1, 0.2, 0.25, 0.3, 0.4, 0.5]
+    see = 20
     uBlock = [0.5, -1, 0, 4]
+    outDir = "/home/harry/ssd1/data/eulerCart/box_4096"
+    outAuxDir = "out"
+    save_figs = False
+
+    os.makedirs(outDir, exist_ok=True)
 
     solver = ecsolver.EulerCartSolver2D(device="cuda:1", dataType=torch.float32)
     solver.set_grid(sz, [0, 1], [0, 1])
@@ -30,6 +39,9 @@ def Run():
 
     u0 = solver.get_init_u_uniform([1, 0, 0, 2.5])
     u0.view(-1, 4)[block, :] = torch.tensor(uBlock, device=u0.device).reshape(1, 4)
+
+    with open(os.path.join(outDir, "problem.pt"), "wb") as f:
+        pickle.dump({"solver": solver, "u0": u0}, f)
 
     u = u0.clone()
 
@@ -54,12 +66,15 @@ def Run():
             # with plt.ion():
             # fig.clear()
             # fig.clf()
-            ax.cla()
-            ax.pcolormesh(xcm.cpu(), ycm.cpu(), rho.cpu(), shading="auto", cmap="jet")
-            ax.axis("equal")
-            plt.show(block=False)
-            plt.pause(0.1)
-            fig.savefig("out/cfig.png")
+            if save_figs:
+                ax.cla()
+                ax.pcolormesh(
+                    xcm.cpu(), ycm.cpu(), rho.cpu(), shading="auto", cmap="jet"
+                )
+                ax.axis("equal")
+                plt.show(block=False)
+                plt.pause(0.1)
+                fig.savefig(os.path.join(outAuxDir, "cfig.png"))
 
             print(
                 "iter %d, t = [%.4e], dt = [%.4e], cpuTime = [%.2e]"
@@ -70,6 +85,14 @@ def Run():
 
             # if iterFull >= 100:
             #     return
+
+            save_file(
+                {
+                    "u": u,
+                },
+                os.path.join(outDir, f"solution_{iterFull:05d}.safetensors"),
+                metadata={"info": json.dumps(info.toJson())},
+            )
 
             if ifOut:
                 break
@@ -83,7 +106,7 @@ def Run():
         axc.pcolormesh(xcm.cpu(), ycm.cpu(), rho.cpu(), shading="auto", cmap="jet")
         axc.axis("equal")
         axc.set_title("t = %g" % (t))
-        figc.savefig("out/rho_t_%g.png" % (t))
+        figc.savefig(os.path.join(outAuxDir, "rho_t_%g.png" % (t)))
 
         iOut += 1
         if iOut >= len(tOuts):
@@ -91,5 +114,5 @@ def Run():
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     Run()

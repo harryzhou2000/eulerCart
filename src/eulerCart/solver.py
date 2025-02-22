@@ -1,6 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 import time
+import json
 
 from . import gas as gas
 from . import cart as cart
@@ -11,13 +12,8 @@ class EulerCartSolver2D:
         self.dataType = dataType
         self.device = device
 
-    def set_grid(self, sz: tuple, xlim: tuple, ylim: tuple):
-        self.xs = torch.linspace(
-            xlim[0], xlim[1], sz[0] + 1, device=self.device, dtype=self.dataType
-        )
-        self.ys = torch.linspace(
-            ylim[0], ylim[1], sz[1] + 1, device=self.device, dtype=self.dataType
-        )
+    def __gen_grid(self):
+        sz = (self.xs.shape[0] - 1, self.ys.shape[0] - 1)
         self.xc = 0.5 * (self.xs[:-1] + self.xs[1:])
         self.yc = 0.5 * (self.ys[:-1] + self.ys[1:])
 
@@ -51,11 +47,37 @@ class EulerCartSolver2D:
         self.wBLo = cart.sub2indFromBool_pytorch(ifwBLo)
         self.wBUp = cart.sub2indFromBool_pytorch(ifwBUp)
 
+    def set_grid(self, sz: tuple, xlim: tuple, ylim: tuple):
+        self.xs = torch.linspace(
+            xlim[0], xlim[1], sz[0] + 1, device=self.device, dtype=self.dataType
+        )
+        self.ys = torch.linspace(
+            ylim[0], ylim[1], sz[1] + 1, device=self.device, dtype=self.dataType
+        )
+        self.__gen_grid()
+
     def set_gamma(self, gamma: float):
         self.gamma = torch.tensor([gamma], device=self.device, dtype=self.dataType)
 
     def set_uBack(self, uBack: list):
         self.uBack = torch.tensor(uBack, device=self.device, dtype=self.dataType)
+
+    def __getstate__(self):
+        # Return a dictionary containing the state of the object
+        return {
+            "xs": self.xs,
+            "ys": self.ys,
+            "uBack": self.uBack,
+            "gamma": self.gamma,
+        }
+
+    def __setstate__(self, state):
+        # Restore the state of the object from the dictionary
+        self.xs = state["xs"]
+        self.ys = state["ys"]
+        self.uBack = state["uBack"]
+        self.gamma = state["gamma"]
+        self.__gen_grid()
 
     def get_init_u_uniform(self, uInit: list):
         uInitT = torch.tensor(uInit, device=self.device, dtype=self.dataType)
@@ -126,12 +148,30 @@ class EulerCartSolver2D:
                 break
 
         class Info:
-            pass
+            def __getstate__(self):
+                # Return a dictionary containing the state of the object
+                return {
+                    "dt": float(self.dt),
+                    "dtCFL": float(self.dtCFL),
+                    "t": float(self.t),
+                    "nSteps": int(self.nSteps),
+                }
+
+            def __setstate__(self, state):
+                # Restore the state of the object from the dictionary
+                self.dt = state["dt"]
+                self.dtCFL = state["dtCFL"]
+                self.t = state["t"]
+                self.nSteps = state["nSteps"]
+
+            def toJson(self):
+                return self.__getstate__()
 
         info = Info()
-        info.dt = dt
-        info.dtCFL = dtCFL
-        info.nSteps = iter
+        info.dt = float(dt)
+        info.dtCFL = float(dtCFL)
+        info.nSteps = int(iter)
+        info.t = float(t)
 
         return u, t, ifOut, info
 

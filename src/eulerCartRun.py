@@ -12,18 +12,21 @@ from safetensors.torch import save_file
 
 
 def Run():
-    sz = (4096, 4096)
+    # sz = (1024, 1024)
+    sz = (10, 10)
     CFL = 0.2
-    tOuts = [0.1, 0.2, 0.25, 0.3, 0.4, 0.5]
-    see = 20
+    # tOuts = [0.001, 0.2, 0.25, 0.3, 0.4, 0.5]
+    tOuts = [0.5]
+    see = 1
     uBlock = [0.5, -1, 0, 4]
-    outDir = "/home/harry/ssd1/data/eulerCart/box_4096"
-    outAuxDir = "out"
+    outDir = "/home/harry/ssd1/data/eulerCart/box-test"
+    outAuxDir = "out-test"
     save_figs = False
 
     os.makedirs(outDir, exist_ok=True)
+    os.makedirs(outAuxDir, exist_ok=True)
 
-    solver = ecsolver.EulerCartSolver2D(device="cuda:1", dataType=torch.float32)
+    solver = ecsolver.EulerCartSolver2D(device="cuda", dataType=torch.float32)
     solver.set_grid(sz, [0, 1], [0, 1])
     solver.set_gamma(1.4)
     solver.set_uBack([1, 0, 0, 2.5])
@@ -89,6 +92,9 @@ def Run():
             save_file(
                 {
                     "u": u,
+                    "xcm": xcm.clone().detach(),
+                    "ycm": ycm.clone().detach(),
+                    "t": torch.as_tensor(t),
                 },
                 os.path.join(outDir, f"solution_{iterFull:05d}.safetensors"),
                 metadata={"info": json.dumps(info.toJson())},

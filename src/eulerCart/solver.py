@@ -28,10 +28,10 @@ class EulerCartSolver2D:
         self.hRi = cart.Ri(self.xcm) - self.xcm
         self.hLo = self.ycm - cart.Lo(self.ycm)
         self.hUp = cart.Up(self.ycm) - self.ycm
-        self.hLe[0, :] = self.hLe[1, :]
-        self.hRi[-1, :] = self.hLe[-2, :]
-        self.hLo[:, 0] = self.hLo[:, 1]
-        self.hUp[:, -1] = self.hUp[:, -2]
+        self.hLe[0, :] = (self.xcm[0, :] - self.xs[0]).abs() * 2
+        self.hRi[-1, :] = (self.xcm[-1, :] - self.xs[-1]).abs() * 2
+        self.hLo[:, 0] = (self.ycm[:, 0] - self.ys[0]).abs() * 2
+        self.hUp[:, -1] = (self.ycm[:, -1] - self.ys[-1]).abs() * 2
 
         rs = torch.tensor(range(sz[0]), device=self.device, dtype=torch.long)
         ss = torch.tensor(range(sz[1]), device=self.device, dtype=torch.long)
@@ -110,7 +110,7 @@ class EulerCartSolver2D:
             ifOut = False
             if t + dt >= t1:
                 ifOut = True
-                dt = t1 - t
+                dt = torch.as_tensor(t1 - t, device=self.device)
 
             def getRHS(uc):
                 return gas.EulerCartRHS(
